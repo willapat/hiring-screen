@@ -1,15 +1,14 @@
+import os
 import uuid
-import base64
-from io import BytesIO
 from typing import Annotated, Optional
 from typing_extensions import TypedDict
-from pypdf import PdfReader
 from langchain_core.messages import AnyMessage, AIMessage, HumanMessage
 from langgraph.graph import StateGraph, START, END
 from langgraph.graph.message import add_messages
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.types import interrupt, Command
 from tools.scoring import JobAnalysis, FitScore
+from tools.file_tools import read_resume
 from middleware.guardrails import check as guardrail_check
 import agents.job_analyzer as job_analyzer_agent
 import agents.fit_scorer as fit_scorer_agent
@@ -29,61 +28,88 @@ class HiringState(TypedDict):
     output: Optional[str]
 
 
-def _extract_file_text(block: dict) -> str:
-    block_type = block.get("type", "")
-    if block_type == "document":
-        source = block.get("source", {})
-        raw = base64.b64decode(source.get("data", "") + "==")
-        media_type = source.get("media_type", "")
-    elif block_type == "file":
-        raw = base64.b64decode(block.get("data", "") + "==")
-        media_type = block.get("mime_type", "")
-    else:
+def _latest_user_text(messages: list) -> str:
+    """Pull the plain text out of the most recent human message."""
+    last = next((m for m in reversed(messages) if isinstance(m, HumanMessage)), None)
+    if not last:
         return ""
-    if "pdf" in media_type:
-        reader = PdfReader(BytesIO(raw))
-        return "\n".join(page.extract_text() or "" for page in reader.pages)
-    return raw.decode("utf-8", errors="ignore")
+    content = last.content
+    if isinstance(content, str):
+        return content.strip()
+    if isinstance(content, list):
+        for block in content:
+            if isinstance(block, dict) and block.get("type") == "text":
+                return block.get("text", "").strip()
+    return ""
 
 
 def build_graph(llm, checkpointer=None):
     def input_parser(state: HiringState):
-        messages = state.get("messages") or []
-        last = next((m for m in reversed(messages) if isinstance(m, HumanMessage)), None)
-        job_description = ""
-        resume_text = ""
-        if last:
-            content = last.content
-            if isinstance(content, str):
-                job_description = content
-            elif isinstance(content, list):
-                for block in content:
-                    if not isinstance(block, dict):
-                        continue
-                    if block.get("type") == "text":
-                        job_description = block.get("text", "")
-                    elif block.get("type") in ("document", "file"):
-                        resume_text = _extract_file_text(block)
-        if not job_description and not resume_text:
-            return {"messages": [AIMessage(content=(
-                "Hi! To analyze your job fit, send me one message with:\n\n"
-                "1. **Job description** — paste it as your message text\n"
-                "2. **Resume** — drag your PDF onto the chat to attach it\n\n"
-                "Then hit send."
-            ))]}
-        if not job_description:
-            return {"messages": [AIMessage(content="Please paste the job description as text in your message (along with the resume PDF attached).")]}
-        if not resume_text:
-            return {"messages": [AIMessage(content="Please also attach your resume PDF — drag it onto the chat input before sending.")]}
-        return {"job_description": job_description, "resume_text": resume_text}
+        text = _latest_user_text(state.get("messages") or [])
+
+        # Step 1 — collect the job description.
+        if not state.get("job_description"):
+            if not text:
+                return {"messages": [AIMessage(content=(
+                    "Hi! I analyze how well you fit a job — I score your match against "
+                    "the required skills, then give you tailored advice (interview prep, "
+                    "skill gaps, or better-fit roles, depending on the score).\n\n"
+                    "To start, **paste the full job description** as your message and hit send."
+                ))]}
+            check = guardrail_check(llm, text)
+            if not check.is_valid:
+                return {"messages": [AIMessage(content=(
+                    "Hi there! 👋 I'm a job-fit assistant. Here's what I do:\n\n"
+                    "I take a job posting and your resume, score how well you match the "
+                    "required skills (0–100), and then give you tailored advice — interview "
+                    "prep if you're a strong fit, a skill-gap plan if you're close, or "
+                    "better-fit role suggestions if it's a stretch.\n\n"
+                    "That message didn't look like a job posting, though — to get started, "
+                    "**paste the full job description** as your message and hit send."
+                ))]}
+            return {
+                "job_description": text,
+                "is_valid": True,
+                "messages": [AIMessage(content=(
+                    "Got the job description. ✅\n\n"
+                    "Now send me your **resume**, either way works:\n"
+                    "- the **file path** to it — e.g. `/Users/willpatton/resume.pdf`, or\n"
+                    "- **paste the resume text** directly.\n\n"
+                    "Then hit send and I'll run the analysis."
+                ))],
+            }
+
+        # Step 2 — collect the resume (file path or pasted text).
+        if not state.get("resume_text"):
+            if not text:
+                return {"messages": [AIMessage(content="Please send your resume — a file path or pasted text.")]}
+            candidate = os.path.expanduser(text.strip().strip("'\""))
+            if os.path.exists(candidate):
+                try:
+                    resume_text = read_resume(candidate)
+                except (ValueError, FileNotFoundError) as e:
+                    return {"messages": [AIMessage(content=(
+                        f"I couldn't read that file: {e}\n\nTry pasting the resume text instead."
+                    ))]}
+            else:
+                resume_text = text
+            return {"resume_text": resume_text}
+
+        return {}
 
     def route_after_parse(state: HiringState) -> str:
-        return "validate_input" if state.get("job_description") else END
+        if state.get("job_description") and state.get("resume_text"):
+            return "validate_input"
+        return END
 
     def route_start(state: HiringState) -> str:
-        return "validate_input" if state.get("job_description") else "input_parser"
+        if state.get("job_description") and state.get("resume_text"):
+            return "validate_input"
+        return "input_parser"
 
     def validate_input(state: HiringState):
+        if state.get("is_valid"):
+            return {}
         result = guardrail_check(llm, state["job_description"])
         if not result.is_valid:
             return {"is_valid": False, "output": result.message}
@@ -96,49 +122,50 @@ def build_graph(llm, checkpointer=None):
         return {"job_analysis": job_analyzer_agent.run(llm, state["job_description"])}
 
     def score_fit(state: HiringState):
-        return {"fit_score": fit_scorer_agent.run(llm, state["job_analysis"], state["resume_text"])}
-
-    def human_review(state: HiringState):
-        fit = state["fit_score"]
+        fit = fit_scorer_agent.run(llm, state["job_analysis"], state["resume_text"])
 
         partial_text = ""
         if fit.partial_matches:
-            lines = [f"  {m.candidate_has} → {m.required}: {m.note}" for m in fit.partial_matches]
-            partial_text = "\nAdjacent skills:\n" + "\n".join(lines)
+            lines = [f"- {m.candidate_has} → {m.required}: {m.note}" for m in fit.partial_matches]
+            partial_text = "\n\n**Adjacent skills:**\n" + "\n".join(lines)
 
-        display = (
-            f"\n{'='*50}\n"
-            f"FIT SCORE: {fit.score}/100  ({fit.verdict.upper()})\n"
-            f"{'='*50}\n"
-            f"Matched:  {', '.join(fit.matched_skills) or 'None'}\n"
-            f"Missing:  {', '.join(fit.missing_skills) or 'None'}"
+        summary = (
+            f"### Fit Score: {fit.score}/100 — {fit.verdict.upper()}\n\n"
+            f"**Matched:** {', '.join(fit.matched_skills) or 'None'}\n\n"
+            f"**Missing:** {', '.join(fit.missing_skills) or 'None'}"
             f"{partial_text}\n\n"
-            f"Reasoning: {fit.reasoning}\n"
-            f"{'='*50}\n"
-            f"If anything looks wrong, type a correction below.\n"
-            f"Otherwise press Enter to continue."
+            f"**Reasoning:** {fit.reasoning}"
         )
 
-        feedback = interrupt(display)
+        return {"fit_score": fit, "messages": [AIMessage(content=summary)]}
+
+    def human_review(state: HiringState):
+        feedback = interrupt(
+            "If anything in the fit score looks wrong, type a correction. "
+            "Otherwise send an empty message to continue to your tailored advice."
+        )
         return {"human_feedback": feedback if feedback and feedback.strip() else None}
 
     def route_by_verdict(state: HiringState) -> str:
         return state["fit_score"].verdict
 
     def prep_interview(state: HiringState):
-        return {"output": interview_prep_agent.run(
+        output = interview_prep_agent.run(
             llm, state["job_analysis"], state["fit_score"], state.get("human_feedback")
-        )}
+        )
+        return {"output": output, "messages": [AIMessage(content=output)]}
 
     def analyze_gaps(state: HiringState):
-        return {"output": gap_analyzer_agent.run(
+        output = gap_analyzer_agent.run(
             llm, state["job_analysis"], state["fit_score"], state.get("human_feedback")
-        )}
+        )
+        return {"output": output, "messages": [AIMessage(content=output)]}
 
     def advise_role(state: HiringState):
-        return {"output": role_advisor_agent.run(
+        output = role_advisor_agent.run(
             llm, state["job_analysis"], state["fit_score"], state.get("human_feedback")
-        )}
+        )
+        return {"output": output, "messages": [AIMessage(content=output)]}
 
     builder = StateGraph(HiringState)
 
@@ -200,9 +227,12 @@ def run(llm, job_description: str, resume_text: str) -> str:
 
     current = graph.get_state(config)
     if current.next:
+        messages = current.values.get("messages") or []
+        if messages:
+            print(messages[-1].content)
         for task in current.tasks:
             for i in task.interrupts:
-                print(i.value)
+                print(f"\n{i.value}")
         feedback = input("\n> ").strip()
         graph.invoke(Command(resume=feedback), config=config)
 

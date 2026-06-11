@@ -46,7 +46,14 @@ It asks for your resume path (`.pdf` or `.txt`), then for the job description (c
 langgraph dev
 ```
 
-Opens the graph in Studio for visual inspection and step-through debugging. In the chat, send the job description as your message text with your resume PDF attached.
+Opens the graph in Studio for visual inspection and step-through debugging. The chat is a two-step conversation:
+
+1. Paste the **job description** as your message and send.
+2. Send your **resume** — either the **file path** to it (e.g. `/Users/you/resume.pdf`, read off disk since the dev server is local) or the **resume text** pasted directly.
+
+It then scores your fit, pauses for review (send an empty message to accept, or type a correction), and posts your tailored advice in the chat.
+
+> Note: Studio's chat file-attachment button does **not** deliver files to a custom-state graph like this one — use the file path instead.
 
 ## Visualizing the graph
 
