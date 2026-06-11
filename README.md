@@ -12,6 +12,10 @@ input → validate → analyze job → score fit → human review → ┬→ str
                                                              └→ weak     → role advice
 ```
 
+The graph as rendered in LangGraph Studio:
+
+![Hiring Screen graph structure in LangGraph Studio](assets/graph-structure.png)
+
 1. **Validate** — a guardrail check confirms the input is actually a job description.
 2. **Analyze job** — a ReAct agent extracts role, skills, and responsibilities, and searches the web for company context.
 3. **Score fit** — the resume is scored against the required skills (0–100), with credit for adjacent/transferable skills (e.g. Azure when AWS is required).
