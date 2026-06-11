@@ -1,0 +1,7 @@
+{
+  "dependencies": ["."],
+  "graphs": {
+    "hiring_screen": "./graph.py:graph"
+  },
+  "env": ".env"
+}
