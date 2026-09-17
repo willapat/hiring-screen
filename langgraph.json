@@ -1,7 +1,10 @@
 {
   "dependencies": ["."],
   "graphs": {
-    "hiring_screen": "./graph.py:graph"
+    "hiring_screen": "./graph.py:graph",
+    "job_match": "./graph.py:job_match_graph",
+    "resume_audit": "./graph.py:resume_audit_graph",
+    "latex_export": "./graph.py:latex_export_graph"
   },
   "env": ".env"
 }
