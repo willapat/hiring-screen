@@ -48,9 +48,10 @@ Candidate's matched skills: {', '.join(fit.matched_skills)}{partial_match_text}{
 
 Current fit score: {fit.score}/100 — {fit.reasoning}{correction_text}"""
 
-    result = agent.invoke({
-        "messages": [HumanMessage(content=human_message)]
-    })
+    result = agent.invoke(
+        {"messages": [HumanMessage(content=human_message)]},
+        config={"recursion_limit": 8},
+    )
 
     content = result["messages"][-1].content
     if isinstance(content, list):

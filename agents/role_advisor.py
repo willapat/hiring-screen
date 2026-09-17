@@ -45,9 +45,10 @@ Missing: {', '.join(fit.missing_skills)}
 
 Fit score: {fit.score}/100 — {fit.reasoning}{correction_text}"""
 
-    result = agent.invoke({
-        "messages": [HumanMessage(content=human_message)]
-    })
+    result = agent.invoke(
+        {"messages": [HumanMessage(content=human_message)]},
+        config={"recursion_limit": 8},
+    )
 
     content = result["messages"][-1].content
     if isinstance(content, list):

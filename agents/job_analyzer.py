@@ -21,8 +21,9 @@ def run(llm, job_description: str) -> JobAnalysis:
         response_format=JobAnalysis,
     )
 
-    result = agent.invoke({
-        "messages": [HumanMessage(content=f"Analyze this job posting:\n\n{job_description}")]
-    })
+    result = agent.invoke(
+        {"messages": [HumanMessage(content=f"Analyze this job posting:\n\n{job_description}")]},
+        config={"recursion_limit": 8},
+    )
 
     return result["structured_response"]
