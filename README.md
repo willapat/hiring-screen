@@ -13,6 +13,26 @@ still there, now joined by three more graphs and a Next.js + FastAPI web app in 
 > LaTeX rewrite is verified by re-scanning the PDF it just produced. **ATS score 95 → 97**, same
 > rubric, both ends.
 
+## Screenshots
+
+![Landing page](assets/screenshot-landing.png)
+
+**ATS Scan** — deterministic score, plain-English narrative, and the full 16-check breakdown
+
+![ATS scan](assets/screenshot-ats-scan.png)
+
+**Resume Review** — issues anchored to exact, highlighted text
+
+![Resume review](assets/screenshot-review.png)
+
+**Job Fit** — score against a pasted job description, editable before advice is generated
+
+![Job fit](assets/screenshot-job-fit.png)
+
+**Export** — LaTeX rewrite with the before/after ATS diff that motivated this whole project
+
+![Export](assets/screenshot-export.png)
+
 ## Features
 
 1. **ATS scan** — 16 deterministic checks modeled on what real parsing engines
