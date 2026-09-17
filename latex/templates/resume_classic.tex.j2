@@ -1,0 +1,54 @@
+\documentclass[10pt,letterpaper]{article}
+
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage[margin=0.75in]{geometry}
+\usepackage{titlesec}
+\usepackage{enumitem}
+\usepackage[hidelinks]{hyperref}
+
+\pagestyle{empty}
+\raggedright
+\hyphenpenalty=10000
+\exhyphenpenalty=10000
+
+\titleformat{\section}{\large\bfseries}{}{0em}{}[\titlerule]
+\titlespacing*{\section}{0pt}{10pt}{6pt}
+
+\setlist[itemize]{leftmargin=1.1em, itemsep=1pt, topsep=2pt, parsep=0pt}
+
+\newcommand{\resumeentry}[4]{%
+  \noindent\textbf{#1} \hfill #3\\
+  \textit{#2} \hfill \textit{#4}\\[2pt]%
+}
+
+\begin{document}
+
+\begin{center}
+  {\LARGE \textbf{(( contact.name | tex ))}}\\[4pt]
+  (( contact_line ))
+\end{center}
+
+((*- if summary *))
+\vspace{4pt}
+\noindent (( summary | tex | texinline ))
+((*- endif *))
+
+((*- for section in sections *))
+\section*{(( section.heading | tex ))}
+((*- if section.raw_text *))
+\noindent (( section.raw_text | tex | texinline ))
+((*- endif *))
+((*- for entry in section.entries *))
+\resumeentry{(( entry.title | tex ))}{(( entry.subtitle | tex ))}{(( entry.date_range | tex ))}{(( entry.location | tex ))}
+((*- if entry.bullets *))
+\begin{itemize}
+((*- for bullet in entry.bullets *))
+  \item (( bullet | tex | texinline ))
+((*- endfor *))
+\end{itemize}
+((*- endif *))
+((*- endfor *))
+((*- endfor *))
+
+\end{document}
