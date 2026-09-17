@@ -1,5 +1,5 @@
 import os
-from pypdf import PdfReader
+from ats.extract import extract
 
 
 def read_resume(path: str) -> str:
@@ -15,8 +15,6 @@ def read_resume(path: str) -> str:
             return f.read().strip()
 
     if ext == ".pdf":
-        reader = PdfReader(path)
-        pages = [page.extract_text() or "" for page in reader.pages]
-        return "\n".join(pages).strip()
+        return extract(path).text
 
     raise ValueError(f"Unsupported file type '{ext}'. Use .pdf or .txt.")
