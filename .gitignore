@@ -16,3 +16,7 @@ env/
 .DS_Store
 .vscode/
 .idea/
+
+# Runtime artifacts
+.checkpoints.sqlite
+builds/
