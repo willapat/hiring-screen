@@ -1,0 +1,31 @@
+{
+  "issues": [
+    {
+      "id": "issue-1",
+      "category": "quantification",
+      "severity": "medium",
+      "quote": "Improved system performance and reliability",
+      "line": 12,
+      "problem": "The impact is described qualitatively without any supporting metric.",
+      "suggestion": "Add a number — e.g. 'Improved system throughput by 30% and reduced downtime incidents by half.'"
+    },
+    {
+      "id": "issue-2",
+      "category": "clarity",
+      "severity": "low",
+      "quote": "Responsible for managing a team of developers",
+      "line": 18,
+      "problem": "Passive, responsibility-focused phrasing instead of an action verb showing what you actually did.",
+      "suggestion": "Rewrite starting with a strong verb: 'Led a team of 5 developers to ship...'"
+    },
+    {
+      "id": "issue-3",
+      "category": "formatting",
+      "severity": "low",
+      "quote": "Skils: Python, Java, SQL",
+      "line": 25,
+      "problem": "Typo in the section header ('Skils' instead of 'Skills').",
+      "suggestion": "Fix the spelling to 'Skills'."
+    }
+  ]
+}
